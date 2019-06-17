@@ -16,6 +16,13 @@
 #' @param reruns numeric. The number of reruns of the procedure, the default is 10.
 #' @param ... Other arguments passed to the cv.glmnet function.
 #'
+#' @importFrom stats coef sd
+#' @importFrom utils combn
+#' @importFrom wrapr match_order
+#'
+#' @import glmnet
+#' @import dplyr
+#'
 #' @return An object with S3 class "ilasso". Selected main effects and interactions. \item{maineffects1 }{For \code{step = "both"} or \code{step = "first"} only. A vector consisting of the indecies of the main effects selected in step 1.} \item{maineffects1 }{For \code{step = "both"} or \code{step = "second"} only. A vector consisting of the indecies of the main effects selected in step 2.} \item{interactions2 }{For \code{step = "both"} or \code{step = "second"} only. A matrix consisting of the indecies of the main effects (columns) corresponding to the pairwise interactions (rows) selected in step 2.}
 #'
 #'
@@ -44,8 +51,9 @@
 #' @export ilasso
 #'
 ilasso <- function(x, y, step = c("both", "first", "second"),
-                           hierarchy = c("strong", "weak"), maineffects1,
-                           family = c("gaussian", "binomial"), standardize = TRUE, reruns = 10, ...) {
+                   hierarchy = c("strong", "weak"), maineffects1,
+                   family = c("gaussian", "binomial"),
+                   standardize = TRUE, reruns = 10, ...) {
   family <- match.arg(family)
   step <- match.arg(step)
   hierarchy <- match.arg(hierarchy)
@@ -72,7 +80,7 @@ ilasso <- function(x, y, step = c("both", "first", "second"),
     if(step == "both") {
       if(length(step1$maineffects1) < 1) {
         stop("No main effects where selected in step 1")
-      } else if (length(step1$maineffects1) == 1 && hierachy == "strong") {
+      } else if (length(step1$maineffects1) == 1 && hierarchy == "strong") {
         stop("Strong hierarchy needs two or more main effects from step 1; only one was selected")
       }
         maineffects1 <- step1$maineffects1
@@ -254,7 +262,7 @@ ilasso <- function(x, y, step = c("both", "first", "second"),
       if(w == 1) {
         matchLambdas <- 1:length(fit2c$lambda)
       } else {
-        matchLambdas <- match_order(LAMBDA2s[,1], fit2c$lambda)
+        matchLambdas <- wrapr::match_order(LAMBDA2s[,1], fit2c$lambda)
       }
       LAMBDA2s[matchLambdas,w] <- fit2c$lambda[matchLambdas]
       # and the corresponding mean cross-validated error
