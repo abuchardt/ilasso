@@ -5,7 +5,7 @@ ilasso
 
 <!-- badges: start -->
 <!-- badges: end -->
-The goal of ilasso is to help identifying interactions via hierarchical lasso regularisation.
+The goal of ilasso is to help identifying interactions via hierarchical lasso regularisation using a two-step procedure.
 
 Installation
 ------------
@@ -46,7 +46,7 @@ fit1 <- ilasso(x = X, y = y, step = "first")
 me1 <- fit1$maineffects1
 print(fit1)
 #> $maineffects1
-#> [1]   1   2  99 102 122
+#> [1]   1   2   4  89 117 122 153 163
 #> 
 #> attr(,"class")
 #> [1] "ilasso"
@@ -59,10 +59,11 @@ Run step 2 under strong hierarchy (default)
 fit2 <- ilasso(x = X, y = y, step = "second", maineffects1 = me1)
 print(fit2)
 #> $maineffects2
-#> [1]   1   2  99 102 122
+#>  [1]   1   2   4  17  38  58  89 117 119 120 122 140 145 151 153 157 163
+#> [18] 167
 #> 
 #> $interactions2
-#>      [,1] [,2]
+#> [1] 1 2
 #> 
 #> attr(,"class")
 #> [1] "ilasso"
@@ -75,10 +76,11 @@ Run both steps under strong hierarchy (default)
 fit12 <- ilasso(x = X, y = y, step = "both")
 print(fit2)
 #> $maineffects2
-#> [1]   1   2  99 102 122
+#>  [1]   1   2   4  17  38  58  89 117 119 120 122 140 145 151 153 157 163
+#> [18] 167
 #> 
 #> $interactions2
-#>      [,1] [,2]
+#> [1] 1 2
 #> 
 #> attr(,"class")
 #> [1] "ilasso"
