@@ -1,0 +1,17 @@
+Package: ilasso
+Type: Package
+Title: Identifying interactions via hierarchical lasso regularisation
+Version: 0.1.0
+Author: Ann-Sophie Buchardt <asbu@sund.ku.dk>
+Maintainer: Ann-Sophie Buchardt <asbu@sund.ku.dk>
+Description: Identify interactions via hierarchical lasso regularisation.
+License: What license is it under?
+Encoding: UTF-8
+LazyData: true
+Suggests:
+    Matrix
+Imports: 
+    glmnet,
+    dplyr,
+    wrapr
+RoxygenNote: 6.1.1
