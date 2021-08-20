@@ -33,7 +33,7 @@
 #' p <- 200
 #' n <- 100
 #' nz <- dplyr::arrange(expand.grid(a = 1:p, b = 1:p), a)
-#' X <- matrix(sample(c(TRUE, FALSE), n * p, replace = TRUE), nrow = n, ncol = p)
+#' X <- matrix(sample(0:2, n*p, replace=TRUE), nrow=n, ncol=p)
 #' ind <- t(combn(ncol(X),2))
 #' out <- apply(ind, 1, function(x) X[,x[1]] * X[,x[2]])
 #' XX <- cbind(X, out)
@@ -54,6 +54,9 @@ ilasso <- function(x, y, step = c("both", "first", "second"),
                    hierarchy = c("strong", "weak"), maineffects1,
                    family = c("gaussian", "binomial"),
                    standardize = TRUE, reruns = 10, ...) {
+
+  this.call <- match.call()
+
   family <- match.arg(family)
   step <- match.arg(step)
   hierarchy <- match.arg(hierarchy)
@@ -94,14 +97,40 @@ ilasso <- function(x, y, step = c("both", "first", "second"),
   }
 
   if(step == "first"){
-    structure(list(maineffects1 = step1$maineffects1), class = "ilasso")
+
+    fit <- list(call = this.call,
+                hierarchy = hierarchy,
+                coef1 = step1$coef1,
+                maineffects1 = step1$maineffects1)
+
+    class(fit) <- "ilasso"
+    fit
+
   } else if (step == "second") {
-    structure(list(maineffects2 = step2$maineffects2,
-                   interactions2 = step2$interactions2), class = "ilasso")
+
+
+    fit <- list(call = this.call,
+                hierarchy = hierarchy,
+                coef2 = step2$coef2,
+                maineffects2 = step2$maineffects2,
+                interactions2 = step2$interactions2)
+
+    class(fit) <- "ilasso"
+    fit
+
   } else if (step == "both") {
-    structure(list(maineffects1 = step1$maineffects1,
-                   maineffects2 = step2$maineffects2,
-                   interactions2 = step2$interactions2), class = "ilasso")
+
+    fit <- list(call = this.call,
+                hierarchy = hierarchy,
+                coef1 = step1$coef1,
+                coef2 = step2$coef2,
+                maineffects1 = step1$maineffects1,
+                maineffects2 = step2$maineffects2,
+                interactions2 = step2$interactions2)
+
+    class(fit) <- "ilasso"
+    fit
+
   }
 
 }
@@ -180,7 +209,8 @@ ilasso <- function(x, y, step = c("both", "first", "second"),
   # Step-1-selected main effects (Non-zero coefficients excluding intercept)
   maineffects1 <- which(as.numeric(vcoef)[-1] != 0)
 
-  list(maineffects1 = maineffects1)
+  list(coef1 = vcoef,
+       maineffects1 = maineffects1)
 }
 #'
 #' Internal ilasso function
@@ -206,6 +236,7 @@ ilasso <- function(x, y, step = c("both", "first", "second"),
   if (nrowy != nobs)
     stop(paste("number of observations in y (", nrowy, ") not equal to the number of rows of x (",
                nobs, ")", sep = ""))
+  colnames(x) <- paste0("X[, ", 1:nvars, "]")
 
   # Features:
   # Include all main effects
@@ -219,6 +250,7 @@ ilasso <- function(x, y, step = c("both", "first", "second"),
     if (requireNamespace("Matrix", quietly = TRUE)) {
       out <- Matrix::Matrix(out, sparse = TRUE)
     }
+    colnames(out) <- apply(ind, 1, function(x) paste0("X[, ",x[1],"]:X[, ",x[2],"]"))
 
   newX <- cbind(x, out)
 
@@ -230,6 +262,7 @@ ilasso <- function(x, y, step = c("both", "first", "second"),
     # Interactions to include
     ind <- t(combn(maineffects1,2))
     out <- apply(ind, 1, function(i) x[,i[1]] * x[,i[2]])
+    colnames(out) <- apply(ind, 1, function(x) paste0("X[, ",x[1],"]:X[, ",x[2],"]"))
 
     newX <- cbind(x, out)
   }
@@ -288,12 +321,16 @@ ilasso <- function(x, y, step = c("both", "first", "second"),
   nzc <- which(as.numeric(c2c)[-1] != 0)
 
   # Step-2-selected main effects
-  maineffects2 <- nzc[nzc %in% 1:ncol(x)]
+  maineffects2 <- nzc[nzc <= ncol(x)]
+  #names(maineffects2) <- paste0("X[, ", 1:nvars, "]")[nzc[nzc <= ncol(x)]]
 
   # Step-2-selected interactions
-  interactions2 <- ind[nzc[!(nzc %in% 1:ncol(x))]-ncol(x),]
+  interactions2 <- ind[nzc[nzc > ncol(x)]-ncol(x),]
+  #rownames(interactions2) <- colnames(out)[nzc[!(nzc %in% 1:ncol(x))]-ncol(x)]
 
   # Return
-  list(interactions2 = interactions2, maineffects2 = maineffects2)
+
+  list(coef2 = c2c, newX = newX,
+       interactions2 = interactions2, maineffects2 = maineffects2)
 
 }

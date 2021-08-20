@@ -43,7 +43,7 @@ Step 2 assumes a pairwise interaction model subject to a hierarchical restrictio
 p <- 200
 n <- 100
 nz <- dplyr::arrange(expand.grid(a = 1:p, b = 1:p), a)
-X <- matrix(sample(c(TRUE, FALSE), n * p, replace = TRUE), nrow = n, ncol = p)
+X <- matrix(sample(0:2, n*p, replace=TRUE), nrow=n, ncol=p)
 ind <- t(combn(ncol(X),2))
 out <- apply(ind, 1, function(x) X[,x[1]] * X[,x[2]])
 XX <- cbind(X, out)
