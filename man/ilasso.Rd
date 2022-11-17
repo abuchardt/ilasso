@@ -4,9 +4,17 @@
 \alias{ilasso}
 \title{Identify interactions with lasso}
 \usage{
-ilasso(x, y, step = c("both", "first", "second"),
-  hierarchy = c("strong", "weak"), maineffects1, family = c("gaussian",
-  "binomial"), standardize = TRUE, reruns = 10, ...)
+ilasso(
+  x,
+  y,
+  step = c("both", "first", "second"),
+  hierarchy = c("strong", "weak"),
+  maineffects1,
+  family = c("gaussian", "binomial"),
+  standardize = TRUE,
+  reruns = 10,
+  ...
+)
 }
 \arguments{
 \item{x}{input matrix, of dimension nobs x nvars; each row is an observation vector. Can be in sparse matrix format.}
