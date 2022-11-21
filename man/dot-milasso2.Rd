@@ -4,7 +4,19 @@
 \alias{.milasso2}
 \title{Internal milasso function}
 \usage{
-.milasso2(X, Y, hierarchy, X1, Y1, standardize, fold, seed, reruns, ...)
+.milasso2(
+  X,
+  Y,
+  hierarchy,
+  preserve,
+  X1,
+  Y1,
+  standardize,
+  fold,
+  seed,
+  reruns,
+  ...
+)
 }
 \arguments{
 \item{X}{input matrix, of dimension nobs x nvars; each row is an observation vector. Can be in sparse matrix format.}

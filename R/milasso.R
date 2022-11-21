@@ -72,11 +72,12 @@
 #'
 milasso <- function(X, Y, step = c("both", "first", "second"),
                    hierarchy = c("strong", "weak"),
+                   preserve = TRUE,
                    X1, Y1,
                    #family = c("gaussian"), #' @param family Response type (see above).
                    standardize = TRUE, standardize.response = TRUE,
                    fold = 5,
-                   seed = 1,
+                   seed = NULL,
                    reruns = 1, ...) {
 
   this.call <- match.call()
@@ -100,7 +101,9 @@ milasso <- function(X, Y, step = c("both", "first", "second"),
   }
 
   if(step %in% c("both", "first")) {
-    step1 <- .milasso1(X, Y, standardize, fold, seed, reruns, ...)
+    step1 <- .milasso1(X = X, Y = Y, standardize = standardize,
+                       fold = fold, seed = seed,
+                       reruns = reruns, ...)
     step2 <- NULL
   }
 
@@ -113,13 +116,19 @@ milasso <- function(X, Y, step = c("both", "first", "second"),
       }
       X1 <- step1$X1
       Y1 <- step1$Y1
+      coef1 <- step1$coef1
     } else {
       step1 <- NULL
     }
     if(missing(X1) && step == "second") {
       stop("Step 2 has no selected main effects from step 1")
     }
-    step2 <- .milasso2(X, Y, hierarchy, X1, Y1, standardize, fold, seed, reruns, ...) #.milasso2(X, Y, hierarchy, X1, Y1, standardize, reruns)
+    step2 <- .milasso2(X = X, Y = Y,
+                       hierarchy = hierarchy, preserve = preserve,
+                       X1 = X1, Y1 = Y1, coef1 = coef1,
+                       standardize = standardize,
+                       fold = fold, seed = seed,
+                       reruns = reruns, ...) #.milasso2(X, Y, hierarchy, X1, Y1, standardize, reruns)
   }
 
   if(step == "first"){
@@ -139,6 +148,8 @@ milasso <- function(X, Y, step = c("both", "first", "second"),
     fit <- list(call = this.call,
                 hierarchy = hierarchy,
                 coef2 = step2$coef2,
+                ME2 = step2$ME2,
+                I2 = step2$I2,
                 X2 = step2$X2,
                 Y2 = step2$Y2,
                 iX2 = step2$iX2,
@@ -153,6 +164,8 @@ milasso <- function(X, Y, step = c("both", "first", "second"),
                 hierarchy = hierarchy,
                 coef1 = step1$coef1,
                 coef2 = step2$coef2,
+                ME2 = step2$ME2,
+                I2 = step2$I2,
                 X1 = step1$X1,
                 Y1 = step1$Y1,
                 X2 = step2$X2,
@@ -282,7 +295,7 @@ milasso <- function(X, Y, step = c("both", "first", "second"),
 #'
 #' @inheritParams milasso
 #'
-.milasso2 <- function(X, Y, hierarchy, X1, Y1, standardize, fold, seed, reruns, ...) {
+.milasso2 <- function(X, Y, hierarchy, preserve, X1, Y1, coef1, standardize, fold, seed, reruns, ...) {
 
   if (reruns < 1) {
     warning("reruns<1; set to 1")
@@ -323,11 +336,11 @@ milasso <- function(X, Y, step = c("both", "first", "second"),
     # To honour hierarchy: no penalty on step-1-selected main effects.
   } else if(hierarchy == "strong") {
 
-    mesx <- X1 #which(msglassofit$Beta != 0, arr.ind = TRUE)[,1]
-    mesy <- Y1 #which(msglassofit$Beta != 0, arr.ind = TRUE)[,2]
+    #mesx <- X1 #which(msglassofit$Beta != 0, arr.ind = TRUE)[,1]
+    #mesy <- Y1 #which(msglassofit$Beta != 0, arr.ind = TRUE)[,2]
 
     # Interactions to include
-    ind <- t(combn(unique(mesx),2))
+    ind <- t(combn(unique(X1),2))
     out <- apply(ind, 1, function(i) X[,i[1]] * X[,i[2]])
     colnames(out) <- apply(ind, 1, function(x) paste0("X[, ",x[1],"]:X[, ",x[2],"]"))
 
@@ -352,16 +365,35 @@ milasso <- function(X, Y, step = c("both", "first", "second"),
   grpWTs <- matrix(1, nrow = P, ncol = nouts)
   # Penalty factor that multiplies lambda to allow
   # no shrinkage of selected main effects
-  grpWTs[X1] <- 0
+  if (preserve) {
+    grpWTs[X1, ] <- 0
+  }
+  if (!preserve) {
+    grpWTs[abs(coef1) > 1.5e-8] <- 0
+  }
 
   tmp2 <- MSGLasso::FindingGRGrps(P, nouts, G, R, cmax, GarrStarts, GarrEnds, RarrStarts, RarrEnds)
   GRgrps <- tmp2$GRgrps
 
   Pen.L <- matrix(rep(1,P*nouts),P,nouts, byrow=TRUE)
+  if (preserve) {
+    Pen.L[X1, ] <- 0
+  }
+  if (!preserve) {
+    Pen.L[abs(coef1) > 1.5e-8] <- 0
+  }
   ## Due to MSGLasso bug (?)
   #Pen_L <- Pen.L
   ## End bug fix
   Pen.G <- matrix(rep(1,G*R),G,R, byrow=TRUE)
+  if (preserve) {
+    Pen.G[X1, ] <- 0
+  }
+  if (!preserve) {
+    #Pen.G[X1, Y1] <- 0
+    Pen.G[abs(coef1) > 1.5e-8] <- 0
+  }
+
   grp_Norm0 <- matrix(rep(0, G*R), nrow=G, byrow=TRUE)
 
   # No CV
@@ -386,7 +418,7 @@ milasso <- function(X, Y, step = c("both", "first", "second"),
     # With CV
     msglassofitcv2 <- try(MSGLasso::MSGLasso.cv(#.MSGLasso.cv(#
       newX, Y, grpWTs, Pen.L, Pen.G, PQgrps, GRgrps,
-      lam1.v, lamG.v, fold, seed), silent=TRUE)
+      lam1.v, lamG.v, fold, seed = seed), silent=TRUE)
 
     if(inherits(msglassofitcv2, "try-error")) stop("MSGLasso error")
 
@@ -419,15 +451,21 @@ milasso <- function(X, Y, step = c("both", "first", "second"),
   # Step-2-selected main effects(Non-zero coefficients excluding intercept)
   X2 <- nzc[nzc[,1] <= ncol(X),1]
   Y2 <- nzc[nzc[,1] <= ncol(X),2]
+  ME2 <- matrix(0, nrow = p, ncol = nouts)
+  ME2[abs(c2c[1:p, ]) > 1.5e-8] <- 1
 
   # Step-2-selected interactions
   iX2 <- ind[nzc[nzc[,1] > ncol(X),1]-ncol(X),1]
   names(iX2) <- colnames(out)[iX2]
   iY2 <- nzc[nzc[,1] > ncol(X),2]
+  I2 <- matrix(0, nrow = ncol(out), ncol = nouts)
+  I2[abs(c2c[(p+1):(p+ncol(out)),]) > 1.5e-8] <- 1
+  rownames(I2) <- colnames(out)
 
   # Return
 
   list(coef2 = c2c, newX = newX,
+       ME2, I2,
        X2 = X2, Y2 = Y2,
        iX2 = iX2, iY2 = iY2)
 

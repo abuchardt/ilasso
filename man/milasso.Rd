@@ -9,6 +9,7 @@ milasso(
   Y,
   step = c("both", "first", "second"),
   hierarchy = c("strong", "weak"),
+  preserve = TRUE,
   X1,
   Y1,
   standardize = TRUE,
