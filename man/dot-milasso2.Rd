@@ -11,6 +11,7 @@
   preserve,
   X1,
   Y1,
+  coef1,
   standardize,
   fold,
   seed,

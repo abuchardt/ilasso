@@ -15,7 +15,7 @@ milasso(
   standardize = TRUE,
   standardize.response = TRUE,
   fold = 5,
-  seed = 1,
+  seed = NULL,
   reruns = 1,
   ...
 )

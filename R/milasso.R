@@ -53,8 +53,11 @@
 #' B <- matrix(0, nrow = p, ncol = q)
 #' B[1, 1] <- 1 # X1 påvirker Y1
 #' B[2, 1] <- 1 # X2 påvirker Y1
+#' B[3, 2] <- 1 # X3 påvirker Y2
+#' B[4, 2] <- 1 # X4 påvirker Y2
 #' BB <- matrix(0, nrow = choose(p, 2), ncol = q)
-#' BB[1,1] <- 1 # VV mellem X1 og X2 på Y1
+#' BB[1,1] <- 2 # VV mellem X1 og X2 på Y1
+#' BB[which(colnames(out) == "X[, 3]:X[, 4]"),2] <- 2 # VV mellem X3 og X4 på Y2
 #' # Parameters
 #' sigmaE <- c(1,rep(5, q-1))
 #' SigmaE <- diag(x = sigmaE, nrow = q, ncol = q)
@@ -72,7 +75,7 @@
 #'
 milasso <- function(X, Y, step = c("both", "first", "second"),
                    hierarchy = c("strong", "weak"),
-                   preserve = TRUE,
+                   preserve = FALSE,
                    X1, Y1,
                    #family = c("gaussian"), #' @param family Response type (see above).
                    standardize = TRUE, standardize.response = TRUE,
@@ -369,7 +372,9 @@ milasso <- function(X, Y, step = c("both", "first", "second"),
     grpWTs[X1, ] <- 0
   }
   if (!preserve) {
-    grpWTs[abs(coef1) > 1.5e-8] <- 0
+    for (i in seq_along(X1)) {
+      grpWTs[X1[i], Y1[i]] <- 0
+    }
   }
 
   tmp2 <- MSGLasso::FindingGRGrps(P, nouts, G, R, cmax, GarrStarts, GarrEnds, RarrStarts, RarrEnds)
@@ -380,7 +385,9 @@ milasso <- function(X, Y, step = c("both", "first", "second"),
     Pen.L[X1, ] <- 0
   }
   if (!preserve) {
-    Pen.L[abs(coef1) > 1.5e-8] <- 0
+    for (i in seq_along(X1)) {
+      Pen.L[X1[i], Y1[i]] <- 0
+    }
   }
   ## Due to MSGLasso bug (?)
   #Pen_L <- Pen.L
@@ -390,8 +397,9 @@ milasso <- function(X, Y, step = c("both", "first", "second"),
     Pen.G[X1, ] <- 0
   }
   if (!preserve) {
-    #Pen.G[X1, Y1] <- 0
-    Pen.G[abs(coef1) > 1.5e-8] <- 0
+    for (i in seq_along(X1)) {
+      Pen.G[X1[i], Y1[i]] <- 0
+    }
   }
 
   grp_Norm0 <- matrix(rep(0, G*R), nrow=G, byrow=TRUE)
@@ -455,9 +463,9 @@ milasso <- function(X, Y, step = c("both", "first", "second"),
   ME2[abs(c2c[1:p, ]) > 1.5e-8] <- 1
 
   # Step-2-selected interactions
-  iX2 <- ind[nzc[nzc[,1] > ncol(X),1]-ncol(X),1]
-  names(iX2) <- colnames(out)[iX2]
-  iY2 <- nzc[nzc[,1] > ncol(X),2]
+  iX2 <- ind[nzc[nzc[,1] > ncol(X),1]-ncol(X), ]
+  rownames(iX2) <- colnames(newX)[nzc[nzc[,1] > ncol(X),1]]
+  iY2 <- matrix(nzc[nzc[,1] > ncol(X),2], ncol = 1)
   I2 <- matrix(0, nrow = ncol(out), ncol = nouts)
   I2[abs(c2c[(p+1):(p+ncol(out)),]) > 1.5e-8] <- 1
   rownames(I2) <- colnames(out)
