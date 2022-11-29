@@ -463,7 +463,7 @@ milasso <- function(X, Y, step = c("both", "first", "second"),
   ME2[abs(c2c[1:p, ]) > 1.5e-8] <- 1
 
   # Step-2-selected interactions
-  iX2 <- ind[nzc[nzc[,1] > ncol(X),1]-ncol(X), ]
+  iX2 <- matrix(ind[nzc[nzc[,1] > ncol(X),1]-ncol(X), ], ncol = 2)
   rownames(iX2) <- colnames(newX)[nzc[nzc[,1] > ncol(X),1]]
   iY2 <- matrix(nzc[nzc[,1] > ncol(X),2], ncol = 1)
   I2 <- matrix(0, nrow = ncol(out), ncol = nouts)
