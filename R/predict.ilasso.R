@@ -4,7 +4,6 @@
 #'
 #' @param object Fitted "ilasso" object.
 #' @param newx Matrix of new values for x of dimension nobs x nouts.
-#' @param ... additional arguments affecting the predictions produced.
 #'
 #' @return The object returned is a vector of length nobs of the fitted values.
 #'
@@ -28,47 +27,75 @@
 #'
 #' @export
 #'
-predict.ilasso <- function(object, newx, ...
-){
-  if (missing(newx)){
-    stop("Value for 'newx' missing")
+predict.ilasso <- function(object, newx) {
+  beta_hat <- as.numeric(object$coef2)
+  beta_names <- rownames(object$coef2)
+
+  beta0 <- beta_hat[beta_names == "(Intercept)"]
+  beta_no_intercept <- beta_hat[beta_names != "(Intercept)"]
+
+  X_full <- newx
+
+  if (!is.null(object$interactions_all) && nrow(object$interactions_all) > 0) {
+    Z <- apply(object$interactions_all, 1, function(j) {
+      newx[, j[1]] * newx[, j[2]]
+    })
+
+    if (is.vector(Z)) Z <- matrix(Z, ncol = 1)
+    X_full <- cbind(newx, Z)
   }
 
-  nouts <- ncol(newx)
-  coefs <- object$coef2
-  hierarchy <- object$hierarchy
-
-  colnames(newx) <- paste0("X[, ", 1:nouts, "]")
-
-  if(length(object$interactions2) == 0) {
-
-    design <- cbind(1, newx)
-
-  } else {
-
-    if(hierarchy == "strong") {
-
-      ind <- t(combn(object$maineffects1,2))
-      out <- apply(ind, 1, function(i) newx[,i[1]] * newx[,i[2]])
-      colnames(out) <- apply(ind, 1, function(x)
-        paste0("X[, ",x[1],"]:X[, ",x[2],"]")
-      )
-      design <- cbind(1, newx, out)
-
-    } else if(hierarchy == "weak") {
-
-      ind <- expand.grid(1:nouts, object$maineffects1)
-      out <- apply(ind, 1, function(i) newx[,i[1]] * newx[,i[2]])
-      colnames(out) <- apply(ind, 1, function(x)
-        paste0("X[, ",x[1],"]:X[, ",x[2],"]")
-      )
-      design <- cbind(1, newx, out)
-
-    }
-
+  if (ncol(X_full) != length(beta_no_intercept)) {
+    stop(
+      "Prediction design mismatch: X_full has ", ncol(X_full),
+      " columns, but coef2 has ", length(beta_no_intercept),
+      " non-intercept coefficients. Check that ilasso() returns interactions_all."
+    )
   }
 
-  nfit <- design %*% coefs
-
-  nfit
+  as.numeric(beta0 + X_full %*% beta_no_intercept)
 }
+# predict.ilasso <- function(object, newx, ...
+# ){
+#   if (missing(newx)){
+#     stop("Value for 'newx' missing")
+#   }
+#
+#   nouts <- ncol(newx)
+#   coefs <- object$coef2
+#   hierarchy <- object$hierarchy
+#
+#   colnames(newx) <- paste0("X[, ", 1:nouts, "]")
+#
+#   if(length(object$interactions2) == 0) {
+#
+#     design <- cbind(1, newx)
+#
+#   } else {
+#
+#     if(hierarchy == "strong") {
+#
+#       ind <- t(combn(object$maineffects1,2))
+#       out <- apply(ind, 1, function(i) newx[,i[1]] * newx[,i[2]])
+#       colnames(out) <- apply(ind, 1, function(x)
+#         paste0("X[, ",x[1],"]:X[, ",x[2],"]")
+#       )
+#       design <- cbind(1, newx, out)
+#
+#     } else if(hierarchy == "weak") {
+#
+#       ind <- expand.grid(1:nouts, object$maineffects1)
+#       out <- apply(ind, 1, function(i) newx[,i[1]] * newx[,i[2]])
+#       colnames(out) <- apply(ind, 1, function(x)
+#         paste0("X[, ",x[1],"]:X[, ",x[2],"]")
+#       )
+#       design <- cbind(1, newx, out)
+#
+#     }
+#
+#   }
+#
+#   nfit <- design %*% coefs
+#
+#   nfit
+# }

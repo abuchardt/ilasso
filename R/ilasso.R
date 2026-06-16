@@ -61,276 +61,284 @@ ilasso <- function(x, y, step = c("both", "first", "second"),
   step <- match.arg(step)
   hierarchy <- match.arg(hierarchy)
 
-  x <- as.matrix(x)
-  y <- as.numeric(y)
+  x <- .prepare_x(x)
+  y <- .prepare_y(y, family = family)
 
-  if(step == "second") {
-    maineffects1 <- as.numeric(maineffects1)
-    if(hierarchy == "weak" && length(maineffects1) < 1) {
-      stop("Number of elements in maineffects1 is less than one")
+  if (step == "second") {
+    if (missing(maineffects1)) {
+      stop("Step 2 requires maineffects1.", call. = FALSE)
     }
-    if(hierarchy == "strong" && length(maineffects1) < 2) {
-      stop("Number of elements in maineffects1 is less than two")
+    maineffects1 <- as.integer(maineffects1)
+    maineffects1 <- maineffects1[!is.na(maineffects1)]
+    maineffects1 <- sort(unique(maineffects1))
+
+    if (hierarchy == "weak" && length(maineffects1) < 1) {
+      stop("Weak hierarchy needs at least one selected main effect.", call. = FALSE)
+    }
+    if (hierarchy == "strong" && length(maineffects1) < 2) {
+      stop("Strong hierarchy needs at least two selected main effects.", call. = FALSE)
     }
   }
 
-  if(step %in% c("both", "first")) {
-    step1 <- .ilasso1(x, y, family, standardize, reruns)
+  if (step %in% c("both", "first")) {
+    step1 <- .ilasso1(x, y, family, standardize, reruns, ...)
     step2 <- NULL
   }
 
   if (step %in% c("both", "second")) {
-    if(step == "both") {
-      if(length(step1$maineffects1) < 1) {
-        stop("No main effects where selected in step 1")
+    if (step == "both") {
+      if (length(step1$maineffects1) < 1) {
+        stop("No main effects were selected in step 1.", call. = FALSE)
       } else if (length(step1$maineffects1) == 1 && hierarchy == "strong") {
-        stop("Strong hierarchy needs two or more main effects from step 1; only one was selected")
+        stop("Strong hierarchy needs two or more main effects from step 1; only one was selected.", call. = FALSE)
       }
-        maineffects1 <- step1$maineffects1
+      maineffects1 <- step1$maineffects1
     } else {
       step1 <- NULL
     }
-    if(missing(maineffects1) && step == "second") {
-      stop("Step 2 has no selected main effects from step 1")
-    }
-    step2 <- .ilasso2(x, y, hierarchy, maineffects1, family, standardize, reruns)
+
+    step2 <- .ilasso2(x, y, hierarchy, maineffects1, family, standardize, reruns, ...)
   }
 
-  if(step == "first"){
-
+  if (step == "first") {
     fit <- list(call = this.call,
                 hierarchy = hierarchy,
                 coef1 = step1$coef1,
                 maineffects1 = step1$maineffects1)
-
-    class(fit) <- "ilasso"
-    fit
-
   } else if (step == "second") {
-
-
     fit <- list(call = this.call,
                 hierarchy = hierarchy,
                 coef2 = step2$coef2,
                 maineffects2 = step2$maineffects2,
-                interactions2 = step2$interactions2)
-
-    class(fit) <- "ilasso"
-    fit
-
-  } else if (step == "both") {
-
+                interactions2 = step2$interactions2,
+                interactions_all = step2$interactions_all,
+                newX = step2$newX)
+  } else {
     fit <- list(call = this.call,
                 hierarchy = hierarchy,
                 coef1 = step1$coef1,
                 coef2 = step2$coef2,
                 maineffects1 = step1$maineffects1,
                 maineffects2 = step2$maineffects2,
-                interactions2 = step2$interactions2)
-
-    class(fit) <- "ilasso"
-    fit
-
+                interactions2 = step2$interactions2,
+                interactions_all = step2$interactions_all,
+                newX = step2$newX)
   }
 
+  class(fit) <- "ilasso"
+  fit
 }
-#'
-#' Internal ilasso function
-#'
-#' @inheritParams ilasso
-#'
-.ilasso1 <- function(x, y, family, standardize, reruns, ...) {
-  if (reruns < 1) {
-    warning("reruns<1; set to 1")
-    reruns = 1
+
+.prepare_x <- function(x) {
+  if (inherits(x, "sparseMatrix")) {
+    return(x)
   }
-  reruns <- as.double(reruns)
-  #this.call <- match.call()
+  as.matrix(x)
+}
+
+.prepare_y <- function(y, family) {
   y <- drop(y)
+
+  if (family == "gaussian") {
+    y_num <- suppressWarnings(as.numeric(y))
+    if (anyNA(y_num)) {
+      stop("For family='gaussian', y must be coercible to numeric without NAs.", call. = FALSE)
+    }
+    return(y_num)
+  }
+
+  # glmnet accepts a two-column matrix for binomial responses; keep it as-is.
+  if (is.matrix(y) && ncol(y) == 2) {
+    return(y)
+  }
+
+  if (is.logical(y)) {
+    return(as.integer(y))
+  }
+
+  if (is.factor(y) || is.character(y)) {
+    y_fac <- as.factor(y)
+    if (nlevels(y_fac) != 2) {
+      stop("For family='binomial', factor/character y must have exactly two levels.", call. = FALSE)
+    }
+    return(y_fac)
+  }
+
+  y_num <- suppressWarnings(as.numeric(y))
+  if (anyNA(y_num)) {
+    stop("For family='binomial', y must be 0/1, logical, two-level factor/character, or a two-column matrix.", call. = FALSE)
+  }
+  if (!all(y_num %in% c(0, 1))) {
+    stop("For family='binomial', numeric y must contain only 0 and 1.", call. = FALSE)
+  }
+  y_num
+}
+
+.check_xy <- function(x, y) {
   np <- dim(x)
-  if (is.null(np) | (np[2] <= 1))
-    stop("x should be a matrix with 2 or more columns")
+  if (is.null(np) || np[2] <= 1) {
+    stop("x should be a matrix with 2 or more columns.", call. = FALSE)
+  }
   nobs <- as.integer(np[1])
-  nvars <- as.integer(np[2])
   dimy <- dim(y)
   nrowy <- ifelse(is.null(dimy), length(y), dimy[1])
-  if (nrowy != nobs)
-    stop(paste("number of observations in y (", nrowy, ") not equal to the number of rows of x (",
-               nobs, ")", sep = ""))
-  vnames <- colnames(x)
-  if (is.null(vnames))
-    vnames <- paste("V", seq(nvars), sep = "")
+  if (nrowy != nobs) {
+    stop(paste0("number of observations in y (", nrowy,
+                ") not equal to the number of rows of x (", nobs, ")"),
+         call. = FALSE)
+  }
+  invisible(TRUE)
+}
 
-  # Lasso regression - wothout repetitions
-  if(reruns==1){
+.cv_glmnet_repeated <- function(x, y, family, standardize, reruns, penalty.factor = NULL, ...) {
+  if (reruns < 1) {
+    warning("reruns < 1; set to 1")
+    reruns <- 1
+  }
+  reruns <- as.integer(reruns)
 
-    # Fit a GLM with lasso and 10-fold cross-validation
-    fit <- glmnet::cv.glmnet(x, y, family, standardize)
-    # Extract coefficients
-    vcoef <- coef(fit, s = "lambda.min")
-
-    # Lasso regression - with repetitions
-  } else {
-
-    mmse <- matrix(ncol=reruns, nrow=100)
-    mlambda <- matrix(ncol=reruns, nrow=100)
-
-    for(w in 1:reruns){
-
-      # Fit a GLM with lasso and 10-fold cross-validation
-      fit <- glmnet::cv.glmnet(x, y, family=family, standardize = standardize)
-
-      # Extract the values of lambda used in the fit
-      if(w == 1) {
-        matchLambdas <- 1:length(fit$lambda)
-      } else {
-        matchLambdas <- wrapr::match_order(mlambda[,1], fit$lambda)
-      }
-      mlambda[matchLambdas,w] <- fit$lambda[matchLambdas]
-      # and the corresponding mean cross-validated error
-      mmse[matchLambdas,w] <- fit$cvm[matchLambdas]
-
-      # Output the progress
-      #cat(".")
-    }
-
-    # Select lambda corresponding to the smallest average MSE
-    if(sum(apply(mlambda, 1, function(x) sd(x)), na.rm = TRUE) == 0) {
-      lambda.min <- mlambda[which.min(rowMeans(mmse, na.rm=TRUE)), 1]
-    } else {
-      warning("Lambdas do not match!")
-    }
-
-    # Extract coefficients
-    vcoef <- coef(fit, s = lambda.min)
-
+  cv_args <- list(
+    x = x,
+    y = y,
+    family = family,
+    standardize = standardize,
+    ...
+  )
+  if (!is.null(penalty.factor)) {
+    cv_args$penalty.factor <- penalty.factor
   }
 
-  # Step-1-selected main effects (Non-zero coefficients excluding intercept)
+  if (reruns == 1) {
+    fit <- do.call(glmnet::cv.glmnet, cv_args)
+    return(list(fit = fit, lambda = "lambda.min"))
+  }
+
+  fits <- vector("list", reruns)
+  for (w in seq_len(reruns)) {
+    fits[[w]] <- do.call(glmnet::cv.glmnet, cv_args)
+  }
+
+  # Robust repeated-CV summary. Rather than relying on exact lambda matching across
+  # runs, use the median lambda.min from the repeated fits.
+  lambda.min <- stats::median(vapply(fits, function(z) z$lambda.min, numeric(1)))
+
+  list(fit = fits[[reruns]], lambda = lambda.min)
+}
+
+.ilasso1 <- function(x, y, family, standardize, reruns, ...) {
+  .check_xy(x, y)
+
+  cv <- .cv_glmnet_repeated(
+    x = x,
+    y = y,
+    family = family,
+    standardize = standardize,
+    reruns = reruns,
+    ...
+  )
+
+  vcoef <- coef(cv$fit, s = cv$lambda)
   maineffects1 <- which(as.numeric(vcoef)[-1] != 0)
 
   list(coef1 = vcoef,
        maineffects1 = maineffects1)
 }
-#'
-#' Internal ilasso function
-#'
-#' @inheritParams ilasso
-#'
+
 .ilasso2 <- function(x, y, hierarchy, maineffects1, family, standardize, reruns, ...) {
+  .check_xy(x, y)
 
-  if (reruns < 1) {
-    warning("reruns<1; set to 1")
-    reruns = 1
+  nvars <- ncol(x)
+  maineffects1 <- sort(unique(as.integer(maineffects1)))
+
+  if (any(maineffects1 < 1 | maineffects1 > nvars)) {
+    stop("maineffects1 contains indices outside the columns of x.", call. = FALSE)
   }
-  reruns <- as.double(reruns)
-  #this.call <- match.call()
-  y <- drop(y)
-  np <- dim(x)
-  if (is.null(np) | (np[2] <= 1))
-    stop("x should be a matrix with 2 or more columns")
-  nobs <- as.integer(np[1])
-  nvars <- as.integer(np[2])
-  dimy <- dim(y)
-  nrowy <- ifelse(is.null(dimy), length(y), dimy[1])
-  if (nrowy != nobs)
-    stop(paste("number of observations in y (", nrowy, ") not equal to the number of rows of x (",
-               nobs, ")", sep = ""))
-  colnames(x) <- paste0("X[, ", 1:nvars, "]")
 
-  # Features:
-  # Include all main effects
-  # There should be no penalty on main effects selected in step 1
-  # Include only interactions between main effects selected in step 1 and another main effect
-  if(hierarchy == "weak"){
+  if (is.null(colnames(x))) {
+    colnames(x) <- paste0("X", seq_len(nvars))
+  }
 
-    # Interactions
-    ind <- expand.grid(1:ncol(x), maineffects1)
-    out <- apply(ind, 1, function(i) x[,i[1]] * x[,i[2]])
-    if (requireNamespace("Matrix", quietly = TRUE)) {
-      out <- Matrix::Matrix(out, sparse = TRUE)
+  if (hierarchy == "weak") {
+    # All pairwise interactions with at least one step-1-selected main effect.
+    # This avoids squares and duplicate pairs.
+    all_pairs <- utils::combn(seq_len(nvars), 2)
+    keep <- all_pairs[1, ] %in% maineffects1 | all_pairs[2, ] %in% maineffects1
+    ind <- t(all_pairs[, keep, drop = FALSE])
+  } else {
+    # Only interactions between step-1-selected main effects.
+    ind <- t(utils::combn(maineffects1, 2))
+  }
+
+  if (nrow(ind) == 0) {
+    stop("No pairwise interactions are available under the requested hierarchy.", call. = FALSE)
+  }
+
+  out <- .make_interactions(x, ind)
+  colnames(out) <- paste0(colnames(x)[ind[, 1]], ":", colnames(x)[ind[, 2]])
+
+  if (inherits(x, "sparseMatrix") || inherits(out, "sparseMatrix")) {
+    if (!requireNamespace("Matrix", quietly = TRUE)) {
+      stop("The Matrix package is required for sparse input.", call. = FALSE)
     }
-    colnames(out) <- apply(ind, 1, function(x) paste0("X[, ",x[1],"]:X[, ",x[2],"]"))
-
-  newX <- cbind(x, out)
-
-    # Include only interactions between step-1-selected main effects
-    # Include all main effects
-    # To honour hierarchy: no penalty on step-1-selected main effects.
-  } else if(hierarchy == "strong") {
-
-    # Interactions to include
-    ind <- t(combn(maineffects1,2))
-    out <- apply(ind, 1, function(i) x[,i[1]] * x[,i[2]])
-    colnames(out) <- apply(ind, 1, function(x) paste0("X[, ",x[1],"]:X[, ",x[2],"]"))
-
+    newX <- cbind(x, out)
+  } else {
     newX <- cbind(x, out)
   }
 
-  # Penalty factor that multiplies lambda to allow
-  # no shrinkage of selected main effects
+  # Penalty factor: selected step-1 main effects are unpenalised to honour hierarchy.
   pf <- rep(1, ncol(newX))
   pf[maineffects1] <- 0
 
-  # Lasso regression
-  if(reruns==1){
+  cv <- .cv_glmnet_repeated(
+    x = newX,
+    y = y,
+    family = family,
+    standardize = standardize,
+    reruns = reruns,
+    penalty.factor = pf,
+    ...
+  )
 
-    fit2c <- try(glmnet::cv.glmnet(newX, y, family=family, standardize = standardize,
-                                   penalty.factor = pf), silent=TRUE)
-    if(inherits(fit2c, "try-error")) stop("cv.glmnet error")
-
-    # Zero and non-zero coefficients
-    c2c <- coef(fit2c, s = "lambda.min")
-
-  } else {
-
-    MSE2s <- matrix(ncol=reruns, nrow=100)
-    LAMBDA2s <- matrix(ncol=reruns, nrow=100)
-
-    for(w in 1:reruns){
-      fit2c <- glmnet::cv.glmnet(newX, y, family=family, standardize = standardize,
-                                 penalty.factor = pf)
-
-      # Extract the values of lambda used in the fits
-      if(w == 1) {
-        matchLambdas <- 1:length(fit2c$lambda)
-      } else {
-        matchLambdas <- wrapr::match_order(LAMBDA2s[,1], fit2c$lambda)
-      }
-      LAMBDA2s[matchLambdas,w] <- fit2c$lambda[matchLambdas]
-      # and the corresponding mean cross-validated error
-      MSE2s[matchLambdas,w] <- fit2c$cvm[matchLambdas]
-
-      if(w < reruns) rm(fit2c)
-      # Output the progress
-      #cat(".")
-    }
-
-    # Select lambda corresponding to the smallest average MSE
-    if(sum(apply(LAMBDA2s, 1, function(i) sd(i)), na.rm = TRUE) == 0) {
-      lambda.min <- LAMBDA2s[which.min(rowMeans(MSE2s, na.rm=TRUE)), 1]
-    } else {
-      warning("Lambdas do not match!")
-    }
-
-    # Zero and non-zero coefficients
-    c2c <- coef(fit2c, s = lambda.min)
-  }
-
-  # Non-zero coefficients (excluding intercept)
+  c2c <- coef(cv$fit, s = cv$lambda)
   nzc <- which(as.numeric(c2c)[-1] != 0)
 
-  # Step-2-selected main effects
-  maineffects2 <- nzc[nzc <= ncol(x)]
-  #names(maineffects2) <- paste0("X[, ", 1:nvars, "]")[nzc[nzc <= ncol(x)]]
+  maineffects2 <- nzc[nzc <= nvars]
 
-  # Step-2-selected interactions
-  interactions2 <- ind[nzc[nzc > ncol(x)]-ncol(x),]
-  #rownames(interactions2) <- colnames(out)[nzc[!(nzc %in% 1:ncol(x))]-ncol(x)]
+  interaction_pos <- nzc[nzc > nvars] - nvars
+  if (length(interaction_pos) == 0) {
+    interactions2 <- matrix(integer(0), ncol = 2,
+                            dimnames = list(NULL, c("var1", "var2")))
+  } else {
+    interactions2 <- ind[interaction_pos, , drop = FALSE]
+    colnames(interactions2) <- c("var1", "var2")
+  }
 
-  # Return
+  # list(coef2 = c2c,
+  #      newX = newX,
+  #      interactions2 = interactions2,
+  #      maineffects2 = maineffects2)
+  list(
+    coef2 = c2c,
+    newX = newX,
+    interactions_all = ind,
+    interactions2 = interactions2,
+    maineffects2 = maineffects2
+  )
+}
 
-  list(coef2 = c2c, newX = newX,
-       interactions2 = interactions2, maineffects2 = maineffects2)
+.make_interactions <- function(x, ind) {
+  if (inherits(x, "sparseMatrix")) {
+    if (!requireNamespace("Matrix", quietly = TRUE)) {
+      stop("The Matrix package is required for sparse input.", call. = FALSE)
+    }
+    out <- lapply(seq_len(nrow(ind)), function(k) x[, ind[k, 1]] * x[, ind[k, 2]])
+    out <- do.call(cbind, out)
+    return(out)
+  }
 
+  out <- matrix(NA_real_, nrow = nrow(x), ncol = nrow(ind))
+  for (k in seq_len(nrow(ind))) {
+    out[, k] <- x[, ind[k, 1]] * x[, ind[k, 2]]
+  }
+  out
 }

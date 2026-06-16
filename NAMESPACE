@@ -2,11 +2,8 @@
 
 S3method(predict,ilasso)
 export(ilasso)
-export(milasso)
 import(dplyr)
 import(glmnet)
-importFrom(MASS,mvrnorm)
-importFrom(dplyr,arrange)
 importFrom(stats,coef)
 importFrom(stats,sd)
 importFrom(utils,combn)

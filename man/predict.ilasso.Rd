@@ -4,14 +4,12 @@
 \alias{predict.ilasso}
 \title{Extract coefficients from an ilasso object}
 \usage{
-\method{predict}{ilasso}(object, newx, ...)
+\method{predict}{ilasso}(object, newx)
 }
 \arguments{
 \item{object}{Fitted "ilasso" object.}
 
 \item{newx}{Matrix of new values for x of dimension nobs x nouts.}
-
-\item{...}{additional arguments affecting the predictions produced.}
 }
 \value{
 The object returned is a vector of length nobs of the fitted values.
